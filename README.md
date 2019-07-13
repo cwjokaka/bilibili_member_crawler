@@ -1,5 +1,5 @@
 # bilibili_member_crawler 
-B站用户爬虫 (求Star\(^o^)/~
+B站用户信息爬虫 (求Star\(^o^)/~
 仅供学习使用
 
 ### 环境

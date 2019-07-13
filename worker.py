@@ -23,7 +23,8 @@ class Worker(Thread):
             'Origin': PAGE_URL,
             'Referer': f'{PAGE_URL}/{random.randint(1, 100000)}',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:67.0) Gecko/20100101 Firefox/67.0',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Connection': 'close'
         }
 
     def run(self) -> None:
@@ -92,6 +93,7 @@ class Worker(Thread):
             print(f'获取用户id: {mid} 详情失败: 接口读取超时, 当前代理:{self.session.proxies["https"]}')
             return
         except ValueError:
+            # 解析json失败基本上就是ip被封了
             print(f'获取用户id: {mid} 详情失败: 解析json出错, 当前代理:{self.session.proxies["https"]}')
             return
         else:

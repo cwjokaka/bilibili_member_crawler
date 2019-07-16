@@ -8,6 +8,8 @@ from requests.cookies import cookiejar_from_dict
 from threading import Thread
 from typing import Optional
 
+from requests.exceptions import ProxyError
+
 from res_manager import res_manager
 from variable import *
 
@@ -16,19 +18,19 @@ class Worker(Thread):
 
     def __init__(self, name) -> None:
         super().__init__(name=name)
-        self.t_name = name
-        self.session = requests.session()
-        self.session.headers = {
+        self.headers = {
             'Host': 'api.bilibili.com',
             'Origin': PAGE_URL,
             'Referer': f'{PAGE_URL}/{random.randint(1, 100000)}',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:67.0) Gecko/20100101 Firefox/67.0',
+            'User-Agent': random.choice(USER_AGENTS),
             'Accept': 'application/json',
-            'Connection': 'close'
+            'Connection': 'close',
+            'X-Requested-With': 'XMLHttpRequest'
         }
+        self.cur_proxy = {'https': f'https://{random.choice(PROXIES)}'}
 
     def run(self) -> None:
-        print(f'爬虫线程:{self.t_name}开始执行...')
+        print(f'爬虫线程:{self.name}开始执行...')
         conn = MySQLdb.connect(host=DB_HOST, user=DB_USER, passwd=DB_PASSWORD, db=DB_NAME, port=DB_PORT, charset='utf8')
         cur = conn.cursor()
         while True:
@@ -85,16 +87,23 @@ class Worker(Thread):
             'jsonp': 'jsonp'
         }
         try:
-            res_json = self.session.get(API_MEMBER_INFO, params=get_params, timeout=6).json()
+            res_json = requests.get(API_MEMBER_INFO, params=get_params, timeout=6, proxies=self.cur_proxy,
+                                    headers=self.headers).json()
         except ConnectTimeout:
-            print(f'获取用户id: {mid} 详情失败: 请求接口超时, 当前代理:{self.session.proxies["https"]}')
+            print(f'获取用户id: {mid} 详情失败: 请求接口超时, 当前代理:{self.cur_proxy["https"]}')
             return
         except ReadTimeout:
-            print(f'获取用户id: {mid} 详情失败: 接口读取超时, 当前代理:{self.session.proxies["https"]}')
+            print(f'获取用户id: {mid} 详情失败: 接口读取超时, 当前代理:{self.cur_proxy["https"]}')
             return
         except ValueError:
             # 解析json失败基本上就是ip被封了
-            print(f'获取用户id: {mid} 详情失败: 解析json出错, 当前代理:{self.session.proxies["https"]}')
+            print(f'获取用户id: {mid} 详情失败: 解析json出错, 当前代理:{self.cur_proxy["https"]}')
+            return
+        except ProxyError:
+            print(f'获取用户id: {mid} 详情失败: 连接代理失败, 当前代理:{self.cur_proxy["https"]}')
+        except requests.ConnectionError:
+            # 可以断定就是代理IP地址无效
+            print(f'获取用户id: {mid} 详情失败: 连接错误, 当前代理:{self.cur_proxy["https"]}')
             return
         else:
             if 'data' in res_json:
@@ -104,15 +113,14 @@ class Worker(Thread):
 
     def _update_session(self):
         """
-        更新session, 主要用于防反爬
+        更新请求信息, 主要用于防反爬
         :return:
         """
-        self.session.headers.update({
+        self.headers.update({
             'Referer': f'{PAGE_URL}/{random.randint(1, 100000)}',
             'User-Agent': random.choice(USER_AGENTS),
         })
-        self.session.proxies.update({
-            'https': f'http://{random.choice(PROXIES)}',
+        random_proxy = random.choice(PROXIES)
+        self.cur_proxy.update({
+            'https': f'http://{random_proxy}',
         })
-        # 以防万一还是把cookie删除好些
-        self.session.cookies = cookiejar_from_dict({})

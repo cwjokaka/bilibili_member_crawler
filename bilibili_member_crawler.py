@@ -9,7 +9,6 @@ class BilibiliMemberCrawler:
     """
     B站爬虫入口,用于初始化配置与开启线程
     """
-
     @classmethod
     def start(cls):
         cls.init()

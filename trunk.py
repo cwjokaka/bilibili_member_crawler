@@ -9,7 +9,6 @@ from typing import Optional
 
 from requests.exceptions import ProxyError
 
-from exception.request_error import RequestError
 from res_manager import res_manager
 from variable import *
 
@@ -34,12 +33,9 @@ class Worker(Thread):
         conn = MySQLdb.connect(host=DB_HOST, user=DB_USER, passwd=DB_PASSWORD, db=DB_NAME, port=DB_PORT, charset='utf8')
         cur = conn.cursor()
         while True:
-            mid = res_manager.get_task()
+            task_url = res_manager.get_task()
             self._update_req_info()
-            try:
-                self._crawl(mid, cur)
-            except RequestError as e:
-                self._insert_failure_record(cur, mid, 0, e.msg)
+            self._crawl(task_url, cur)
             conn.commit()
             time.sleep(random.uniform(FETCH_INTERVAL_MIN, FETCH_INTERVAL_MAX))
 
@@ -50,15 +46,12 @@ class Worker(Thread):
         :param cur: mysql游标
         :return: None
         """
-        if self._is_member_exist(cur, mid):
-            print(f'数据库中已存在此用户mid:{mid}, 忽略')
-            return
         member_info = self._get_member_by_mid(mid)
         if member_info is None:
             return
         mid = member_info['mid']
         name = member_info['name']
-        sign = member_info['sign'].replace("'", "\\\'")
+        sign = member_info['sign'].replace("'", "\\'")
         rank = member_info['rank']
         level = member_info['level']
         jointime = member_info['jointime']
@@ -95,23 +88,18 @@ class Worker(Thread):
         try:
             res_json = requests.get(API_MEMBER_INFO, params=get_params, timeout=32, proxies=self.cur_proxy,
                                     headers=self.headers).json()
-        except ConnectTimeout as e:
+        except ConnectTimeout:
             print(f'获取用户id: {mid} 详情失败: 请求接口超时, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
-        except ReadTimeout as e:
+        except ReadTimeout:
             print(f'获取用户id: {mid} 详情失败: 接口读取超时, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
-        except ValueError as e:
+        except ValueError:
             # 解析json失败基本上就是ip被封了
             print(f'获取用户id: {mid} 详情失败: 解析json出错, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
         except ProxyError as e:
-            print(f'获取用户id: {mid} 详情失败: 连接代理失败, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
-        except requests.ConnectionError as e:
+            print(f'获取用户id: {mid} 详情失败: 连接代理失败, 当前代理:{self.cur_proxy["https"]}, {e}')
+        except requests.ConnectionError:
             # 可以断定就是代理IP地址无效
             print(f'获取用户id: {mid} 详情失败: 连接错误, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
         else:
             if 'data' in res_json:
                 return res_json['data']
@@ -130,18 +118,3 @@ class Worker(Thread):
         self.cur_proxy.update({
             'https': f'http://{random.choice(PROXIES)}',
         })
-
-    def _insert_failure_record(self, cur, mid, state, remark):
-        remark = remark.replace("'", "\\\'")
-        cur.execute(
-            "INSERT INTO failure_record (mid, remark, state) "
-            f"VALUES ({mid}, '{remark}', '{state}')"
-        )
-
-    def _is_member_exist(self, cur, mid):
-        cur.execute(
-            "SELECT COUNT(*) FROM bilibili_member "
-            f"WHERE mid={mid}"
-        )
-        return cur.fetchone()[0] == 1
-

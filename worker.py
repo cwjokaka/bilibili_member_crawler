@@ -4,30 +4,21 @@ import random
 import requests
 
 from requests import ConnectTimeout, ReadTimeout
-from threading import Thread
 from typing import Optional
 
 from requests.exceptions import ProxyError
 
+from base_worker import BaseWorker
 from exception.request_error import RequestError
+from exception.sql_insert_error import SqlInsertError
 from res_manager import res_manager
 from variable import *
 
 
-class Worker(Thread):
+class Worker(BaseWorker):
 
     def __init__(self, name) -> None:
         super().__init__(name=name)
-        self.headers = {
-            'Host': 'api.bilibili.com',
-            'Origin': PAGE_URL,
-            'Referer': f'{PAGE_URL}/{random.randint(1, 100000)}',
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'application/json',
-            'Connection': 'close',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        self.cur_proxy = {'https': f'http://{random.choice(PROXIES)}'}
 
     def run(self) -> None:
         print(f'爬虫线程:{self.name}开始执行...')
@@ -35,11 +26,19 @@ class Worker(Thread):
         cur = conn.cursor()
         while True:
             mid = res_manager.get_task()
-            self._update_req_info()
-            try:
-                self._crawl(mid, cur)
-            except RequestError as e:
-                self._insert_failure_record(cur, mid, 0, e.msg)
+            while True:
+                self._update_req_info()
+                try:
+                    self._crawl(mid, cur)
+                    break
+                except RequestError:
+                    # 如果是请求上的异常，则重试
+                    print(f'重新爬取用户:{mid}')
+                except SqlInsertError as e:
+                    # 数据插入异常, 则插入异常记录
+                    self._insert_failure_record(cur, mid, 0, e.msg)
+                except MySQLdb.IntegrityError:
+                    print(f'用户: {mid} 数据已存在,不作插入')
             conn.commit()
             time.sleep(random.uniform(FETCH_INTERVAL_MIN, FETCH_INTERVAL_MAX))
 
@@ -79,8 +78,7 @@ class Worker(Thread):
                         )
         except MySQLdb.ProgrammingError as e:
             print(f'插入用户: {mid} 数据出错:{e}')
-        except MySQLdb.IntegrityError:
-            print(f'用户: {mid} 数据已存在,不作插入')
+            raise SqlInsertError
 
     def _get_member_by_mid(self, mid: int) -> Optional[dict]:
         """
@@ -118,30 +116,4 @@ class Worker(Thread):
             print(f'获取用户id: {mid} 详情失败: data字段不存在!')
         return
 
-    def _update_req_info(self):
-        """
-        更新请求信息, 主要用于防反爬
-        :return:
-        """
-        self.headers.update({
-            'Referer': f'{PAGE_URL}/{random.randint(1, 100000)}',
-            'User-Agent': random.choice(USER_AGENTS),
-        })
-        self.cur_proxy.update({
-            'https': f'http://{random.choice(PROXIES)}',
-        })
-
-    def _insert_failure_record(self, cur, mid, state, remark):
-        remark = remark.replace("'", "\\\'")
-        cur.execute(
-            "INSERT INTO failure_record (mid, remark, state) "
-            f"VALUES ({mid}, '{remark}', '{state}')"
-        )
-
-    def _is_member_exist(self, cur, mid):
-        cur.execute(
-            "SELECT COUNT(*) FROM bilibili_member "
-            f"WHERE mid={mid}"
-        )
-        return cur.fetchone()[0] == 1
 

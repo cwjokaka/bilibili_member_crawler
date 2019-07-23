@@ -6,11 +6,12 @@ import requests
 from requests import ConnectTimeout, ReadTimeout
 from typing import Optional
 
-from requests.exceptions import ProxyError
+from requests.exceptions import ProxyError, ChunkedEncodingError
 
 from base_worker import BaseWorker
-from exception.request_error import RequestError
-from exception.sql_insert_error import SqlInsertError
+from exception.request_exception import RequestException
+from exception.sql_already_exists_exception import SqlAlreadyExistsException
+from exception.sql_insert_exception import SqlInsertException
 from res_manager import res_manager
 from variable import *
 
@@ -31,14 +32,16 @@ class Worker(BaseWorker):
                 try:
                     self._crawl(mid, cur)
                     break
-                except RequestError:
+                except RequestException:
                     # 如果是请求上的异常，则重试
-                    print(f'重新爬取用户:{mid}')
-                except SqlInsertError as e:
+                    # print(f'重新爬取用户:{mid}')
+                    continue
+                except SqlInsertException as e:
                     # 数据插入异常, 则插入异常记录
                     self._insert_failure_record(cur, mid, 0, e.msg)
-                except MySQLdb.IntegrityError:
-                    print(f'用户: {mid} 数据已存在,不作插入')
+                    break
+                except SqlAlreadyExistsException:
+                    break
             conn.commit()
             time.sleep(random.uniform(FETCH_INTERVAL_MIN, FETCH_INTERVAL_MAX))
 
@@ -78,7 +81,10 @@ class Worker(BaseWorker):
                         )
         except MySQLdb.ProgrammingError as e:
             print(f'插入用户: {mid} 数据出错:{e}')
-            raise SqlInsertError
+            raise SqlInsertException(str(e))
+        except MySQLdb.IntegrityError:
+            print(f'用户: {mid} 数据已存在,不作插入')
+            raise SqlAlreadyExistsException('数据已存在')
 
     def _get_member_by_mid(self, mid: int) -> Optional[dict]:
         """
@@ -95,21 +101,24 @@ class Worker(BaseWorker):
                                     headers=self.headers).json()
         except ConnectTimeout as e:
             print(f'获取用户id: {mid} 详情失败: 请求接口超时, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
+            raise RequestException(str(e))
         except ReadTimeout as e:
             print(f'获取用户id: {mid} 详情失败: 接口读取超时, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
+            raise RequestException(str(e))
         except ValueError as e:
             # 解析json失败基本上就是ip被封了
             print(f'获取用户id: {mid} 详情失败: 解析json出错, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
+            raise RequestException(str(e))
         except ProxyError as e:
             print(f'获取用户id: {mid} 详情失败: 连接代理失败, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
+            raise RequestException(str(e))
         except requests.ConnectionError as e:
             # 可以断定就是代理IP地址无效
             print(f'获取用户id: {mid} 详情失败: 连接错误, 当前代理:{self.cur_proxy["https"]}')
-            raise RequestError(str(e))
+            raise RequestException(str(e))
+        except ChunkedEncodingError as e:
+            print(f'获取用户id: {mid} 详情失败: 远程主机强迫关闭了一个现有的连接, 当前代理:{self.cur_proxy["https"]}')
+            raise RequestException(str(e))
         else:
             if 'data' in res_json:
                 return res_json['data']

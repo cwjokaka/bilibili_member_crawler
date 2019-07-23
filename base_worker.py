@@ -31,6 +31,7 @@ class BaseWorker(Thread, metaclass=ABCMeta):
         })
         self.cur_proxy.update({
             'https': f'https://{random.choice(PROXIES)}',
+            'http': f'http://{random.choice(PROXIES)}',
         })
 
     @staticmethod

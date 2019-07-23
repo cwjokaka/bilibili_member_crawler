@@ -1,4 +1,4 @@
-class BilibiliError(Exception):
+class BilibiliException(Exception):
     def __init__(self, msg) -> None:
         self.msg = msg
 

@@ -109,7 +109,7 @@ class Worker(Thread):
             'jsonp': 'jsonp'
         }
         try:
-            res_json = requests.get(API_MEMBER_INFO, params=get_params, timeout=32, proxies=self.cur_proxy,
+            res_json = requests.get(API_MEMBER_INFO, params=get_params, timeout=WAIT_MAX, proxies=self.cur_proxy,
                                     headers=self.headers).json()
         except ConnectTimeout as e:
             print(f'获取用户id: {mid} 详情失败: 请求接口超时, 当前代理:{self.cur_proxy["https"]}')

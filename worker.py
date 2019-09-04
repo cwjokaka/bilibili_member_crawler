@@ -13,6 +13,7 @@ from requests.exceptions import ProxyError, ChunkedEncodingError
 from exception.request_exception import RequestException
 from exception.sql_already_exists_exception import SqlAlreadyExistsException
 from exception.sql_insert_exception import SqlInsertException
+from exception.user_not_found_exception import UserNotFoundException
 from res_manager import res_manager
 from variable import *
 
@@ -49,6 +50,9 @@ class Worker(Thread):
                     continue
                 except SqlInsertException as e:
                     # 数据插入异常, 则插入异常记录
+                    self._insert_failure_record(cur, mid, 0, e.msg)
+                    break
+                except UserNotFoundException as e:
                     self._insert_failure_record(cur, mid, 0, e.msg)
                     break
                 except SqlAlreadyExistsException:
@@ -132,6 +136,9 @@ class Worker(Thread):
             print(f'获取用户id: {mid} 详情失败: 远程主机强迫关闭了一个现有的连接, 当前代理:{self.cur_proxy["https"]}')
             raise RequestException(str(e))
         else:
+            if res_json['code'] == -404:
+                print(f'找不到用户mid:{mid}')
+                raise UserNotFoundException(f'找不到用户mid:{mid}')
             if 'data' in res_json:
                 return res_json['data']
             print(f'获取用户id: {mid} 详情失败: data字段不存在!')

@@ -1,6 +1,6 @@
 # bilibili_member_crawler 
 B站用户信息爬虫 (求Star\(^o^)/~
-仅供学习使用
+仅供娱乐学习使用
 
 ### 环境
 * python 3.6+
@@ -30,10 +30,11 @@ pip install -r requirements.txt
 * `variable.py`: 配置文件, 包含代理、数据库、线程设置等
 * `sql/bilibili.sql`：数据库初始化文件
 * `user-agents.txt`：浏览器agent列表文件
+* `exception/*`：各类异常
 
 ### 注意
 * 请控制好您的车速(由variable.py的线程数、爬取时间间隔决定)
-* 代理PROXIES需要定期更换
+* 代理PROXIES需要定期更换(2019/9/4已加入外部代理池)
 
 
 PS:有时间会做相关统计 (溜了溜了

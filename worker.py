@@ -57,6 +57,8 @@ class Worker(Thread):
                     break
                 except SqlAlreadyExistsException:
                     break
+                except Exception as e:
+                    continue
             conn.commit()
             time.sleep(random.uniform(FETCH_INTERVAL_MIN, FETCH_INTERVAL_MAX))
 
@@ -88,8 +90,7 @@ class Worker(Thread):
         vip_status = member_info['vip']['status']
         try:
             cur.execute(f"INSERT INTO bilibili_member "
-                        f"(mid, name, sign, rank, level, jointime, moral, silence, birthday, coins, fans_badge, "
-                        f"vip_type, vip_status) "
+                        f"(mid, name, sign, `rank`, `level`, jointime, moral, silence, birthday, coins, fans_badge, vip_type, vip_status) "
                         f"VALUES "
                         f"({mid}, '{name}', '{sign}', {rank}, {level}, {jointime}, {moral}, {silence}, '{birthday}', "
                         f"{coins}, {fans_badge}, {vip_type}, {vip_status})"

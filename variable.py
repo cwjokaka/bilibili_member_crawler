@@ -7,7 +7,7 @@ API_MEMBER_INFO = 'http://api.bilibili.com/x/space/acc/info'
 DB_HOST = 'localhost'
 DB_PORT = 3306
 DB_USER = 'root'
-DB_PASSWORD = 'root'
+DB_PASSWORD = '123456'
 DB_NAME = 'bilibili'
 
 # 使用https://github.com/jhao104/proxy_pool的代理池，也可自行部署其服务，然后把PROXY_POOL_URL的地址改成localhost
